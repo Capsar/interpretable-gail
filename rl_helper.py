@@ -1,18 +1,24 @@
 import numpy as np
 from gym import Env
+import gym
+
 
 class QLearning:
 
+
+    #TODO: Make size of Q_table dependable on observation_space.
+    #TODO: Setup Q_table according to size not upscaling and rounding.
     def __init__(self, env: Env, discretize: list):
         self.env = env
         self.env.reset()
 
         self.discretize = discretize
-        
+
         self.num_states = (self.env.observation_space.high - self.env.observation_space.low)*np.array(self.discretize)
         self.num_states = np.round(self.num_states, 0).astype(int) + 1
+        print(self.num_states)
 
-        self.Q_table = np.random.uniform(low= -1, high=1, size=(self.num_states[0], self.num_states[1], self.env.action_space.n))
+        self.Q_table = np.random.uniform(low= -1, high=1, size=(list(self.num_states) + [self.env.action_space.n]))
         print("Initialized Q_table:", self.Q_table.shape)
 
     def load(self, file:str):
@@ -28,9 +34,38 @@ class QLearning:
 
     def do_action(self, state_adj, epsilon=0):
         if np.random.random() < 1 - epsilon:
-            return np.argmax(self.Q_table[state_adj[0], state_adj[1]])
+            return np.argmax(self.Q_table[tuple(state_adj)])
         else:
-            return np.random.randint(0, self.env.action_space.n)   
+            return self.env.action_space.sample()   
+
+    def generate_trajectories_and_actions(self, n=10, render=False):
+        states = []
+        actions = []
+
+        for i in range(n):
+            total_reward = 0
+            #Reset Environmnet
+            state = self.env.reset()
+            state = self.discretizeState(state, self.env.observation_space.low)
+            done = False
+            while done == False:
+                if render:
+                    self.env.render()
+                action = self.do_action(state)
+
+        
+                #perform action in environment
+                state, reward, done, info = self.env.step(action)
+        
+                #Save state and action to memory
+                states.append(state)
+                actions.append(action)
+        
+                state = self.discretizeState(state, self.env.observation_space.low)
+                total_reward+=reward
+
+            #save trajectory and actions to large memory
+        return states, actions
 
     def train(self, epochs, lr, epsilon, discount):
         reward_list = []
@@ -52,12 +87,12 @@ class QLearning:
                 state2, reward, done, info = self.env.step(action)
                 state2_adj = self.discretizeState(state2, self.env.observation_space.low)
 
-                #Allow for terminal states
+                #Allow for terminal states (if done in time -> maximize reward)
                 if done and state2[0] >= 0.5:
                     self.Q_table[state_adj[0], state_adj[1], action] = reward
                 else:
-                    delta = lr*(reward + discount*np.max(self.Q_table[state2_adj[0], state2_adj[1]]) - self.Q_table[state_adj[0], state_adj[1], action])
-                    self.Q_table[state_adj[0], state_adj[1], action] += delta
+                    delta = lr*(reward + discount*np.max(self.Q_table[tuple(state2_adj)]) - self.Q_table[tuple(list(state_adj) + [action])])
+                    self.Q_table[tuple(list(state_adj) + [action])] += delta
 
                 #Update total_reward & update state for new action.
                 tot_reward += reward
