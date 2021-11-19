@@ -1,10 +1,8 @@
 import numpy as np
 from gym import Env
-import gym
 
 
 class QLearning:
-
 
     #TODO: Make size of Q_table dependable on observation_space.
     #TODO: Setup Q_table according to size not upscaling and rounding.
