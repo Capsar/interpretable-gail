@@ -32,10 +32,12 @@ class QLearning(RL_Algorithm):
         self.Q_table = {}
 
     def load(self):
-        self.Q_table = self.loadz(f'./models/Q_Table_{self.env.spec.id}')
+        discretize = '_'.join(map(str, self.discretize))
+        self.Q_table = self.loadz(f'./models/Q_Table_{self.env.spec.id}_{discretize}')
 
     def save(self):
-        self.savez(self.Q_table, f'./models/Q_Table_{self.env.spec.id}')
+        discretize = '_'.join(map(str, self.discretize))
+        self.savez(self.Q_table, f'./models/Q_Table_{self.env.spec.id}_{discretize}')
 
     def discretizeState(self, state):
         state_adj = state*np.array(self.discretize)
@@ -50,34 +52,29 @@ class QLearning(RL_Algorithm):
         else:
             return self.env.action_space.sample()   
 
-    def generate_trajectories_and_actions(self, n=10, render=False):
-        states = []
-        actions = []
+    def generate_trajectories(self, n=10, render=False):
+        trajectories = []
 
         for i in range(n):
-            total_reward = 0
             #Reset Environmnet
             state = self.env.reset()
-            state = self.discretizeState(state)
             done = False
             while done == False:
                 if render:
                     self.env.render()
-                action = self.do_action(state)
+                action = self.do_action(self.discretizeState(state))
 
-        
                 #perform action in environment
-                state, reward, done, info = self.env.step(action)
+                next_state, reward, done, info = self.env.step(action)
         
                 #Save state and action to memory
-                states.append(state)
-                actions.append(action)
-        
-                state = self.discretizeState(state)
-                total_reward+=reward
+                trajectories.append((state, action))
+
+                state = next_state
+
             self.env.close()
             #save trajectory and actions to large memory
-        return states, actions
+        return trajectories
 
     def train(self, epochs, lr, epsilon, discount):
         reward_list = []
@@ -99,12 +96,8 @@ class QLearning(RL_Algorithm):
                 state2, reward, done, info = self.env.step(action)
                 state2_adj = self.discretizeState(state2)
 
-                #Allow for terminal states (if done in time -> maximize reward)
-                if done and state2[0] >= 0.5:
-                    self.Q_table[tuple(list(state_adj))][action] = reward
-                else:
-                    delta = lr*(reward + discount*np.max(self.Q_table[tuple(state2_adj)]) - self.Q_table[tuple(state_adj)][action])
-                    self.Q_table[tuple(state_adj)][action] += delta
+                delta = lr*(reward + discount*np.max(self.Q_table[tuple(state2_adj)]) - self.Q_table[tuple(state_adj)][action])
+                self.Q_table[tuple(state_adj)][action] += delta
 
                 #Update total_reward & update state for new action.
                 tot_reward += reward
