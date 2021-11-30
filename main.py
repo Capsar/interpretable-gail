@@ -20,15 +20,15 @@ print('')
 
 # Setup Qlearning to create expert model
 q_learner = QLearning(env, discretize)
-q_learner.load()
-q_learner.train(1000, lr=0.5, epsilon=0.05, discount=0.99)
-q_learner.save()
+# q_learner.load()
+# q_learner.train(1000, lr=0.5, epsilon=0.05, discount=0.99)
+# q_learner.save()
 
 # Generate expert data from expert model
 q_agent = QLearning(env, discretize)
 q_agent.load()
 q_agent.get_average_reward(1, render=True)
-expert_trajectories = q_agent.generate_trajectories(200)
+expert_trajectories = q_agent.generate_trajectories(1000)
 expert_state_actions = [tuple(list(s) + [a]) for s,a in expert_trajectories]
 expert_labels = [1 for i in expert_trajectories]
 
@@ -38,7 +38,7 @@ max_sample_size = 1000
 number_of_tests = 50
 
 #init generator and discriminator policy parameters theta & w
-generator = DecisionTree(env, max_depth=3, max_features=2)
+generator = DecisionTree(env, max_depth=10, max_features=6)
 
 discriminator = LogisticRegression()
 discriminator.fit([tuple(list(env.reset()) + [0]), tuple(list(env.reset()) + [1])], [0, 1])
@@ -48,7 +48,10 @@ print('-------------------------------------------------------------------------
 
 for i in range(epochs):
 
-    print('Epoch: ', i)
+    print('Epoch: ', i+1)
+
+    generator.get_average_reward(number_of_tests)
+
     #Generate state action pairs from generator (expert states used as input)
     generator_state_actions = [tuple(list(s) + [generator.do_action(s)]) for s,_ in list(expert_trajectories)]
     generator_labels = [0 for i in generator_state_actions]
@@ -63,6 +66,7 @@ for i in range(epochs):
     # print(list(zip(sample_state_actions, sample_labels))[0:5], list(zip(expert_state_actions, expert_labels))[0:5], list(zip(generator_state_actions, generator_labels))[0:5])
 
     #Train the discriminator with full sample trajectories and labels.
+    print('Training discriminator:')
     discriminator.fit(sample_state_actions, sample_labels)
     print('Discriminator score on expert & generator data:', discriminator.score(expert_state_actions, expert_labels), discriminator.score(generator_state_actions, generator_labels))
     print('Discriminator prediction on expert & generator data:', np.array(discriminator.predict(expert_state_actions)).mean(), np.array(discriminator.predict(generator_state_actions)).mean())
@@ -74,6 +78,7 @@ for i in range(epochs):
     # sample_state_actions, sample_labels = [sample_state_actions[i] for i in idx], [sample_labels[i] for i in idx]
 
     #Get all state action pairs classified as expert data by the discriminator
+    print("Training generator:")
     new_generator_s, new_generator_a = [], []
     for s_a, p_expert in list(zip(sample_state_actions, discriminator.predict_proba(sample_state_actions))):
         if np.random.random() < p_expert[1]:
@@ -89,10 +94,10 @@ for i in range(epochs):
 
 
 #Final test expert vs Generator:
-total_tests = 500
-q_agent.get_average_reward(total_tests)
+total_tests = 1000
 generator.get_average_reward(total_tests)
-
+generator.save()
+q_agent.get_average_reward(total_tests)
 # Evaluate the new generative model in terms of interpretability (size, average path length, compared to optimal)
 
 # Recommendation for increasing interpretability of the generative model.

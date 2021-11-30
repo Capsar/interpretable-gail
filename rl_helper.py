@@ -84,7 +84,7 @@ class DecisionTree(RL_Algorithm):
         self.decision_tree.fit(new_generator_s, new_generator_a)
 
     def generate_trajectories(self, n=10, render=False):
-        super().generate_trajectories(self.do_action, self.env, n, render)
+        return super().generate_trajectories(self.do_action, self.env, n, render)
 
     def get_average_reward(self, number_of_tests, render=False):
         return super().get_average_reward(self.do_action, self.env, number_of_tests, "DecisionTree", render=False)
