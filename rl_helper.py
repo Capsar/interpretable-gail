@@ -4,8 +4,13 @@ import pickle
 from numpy.core.fromnumeric import size
 from typing import Any
 from sklearn.tree import DecisionTreeClassifier
+import tensorflow as tf
+from sklearn.linear_model import LogisticRegression
 
-class RL_Algorithm():
+from keras.models import Sequential
+from keras.layers import Dense
+
+class RL_Agent():
     def __init__(self, env: Env):
         pass
 
@@ -44,24 +49,29 @@ class RL_Algorithm():
             #save trajectory and actions to large memory
         return trajectories
 
-    def get_average_reward(self, do_action, env:Env, number_of_tests, actor, render=False):
-        total_reward = 0
+    def get_average_reward(self, do_action, env:Env, number_of_tests, actor, start_state=[], render=False, printt=False):
+        rewards = []
         for ii in range(number_of_tests):
             state = env.reset()
+            if len(start_state) != 0:
+                state = start_state
+
+            game_reward = 0
             done = False
             while done == False:
                 if render:
                     env.render()
                 action = do_action(state)
                 state, reward, done, info = env.step(action)
-                total_reward+=reward
-        if number_of_tests == 1:
-            print(f'Total average {actor} reward: {total_reward / number_of_tests}')
-        else:
-            print(f'Total average {actor} reward over {number_of_tests} games is: {total_reward / number_of_tests}')
-        return total_reward
+                game_reward += reward
+            rewards.append(game_reward)
+            
+        rewards = np.asarray(rewards)
+        if printt:
+                print(f'Reward of {actor} with {number_of_tests} tests -> mean: {rewards.mean()}, std: {rewards.std()}, min: {rewards.min()}, & max: {rewards.max()}')
+        return rewards.mean(), rewards.std()
 
-class DecisionTree(RL_Algorithm):
+class DecisionTree(RL_Agent):
 
     def __init__(self, env: Env, max_depth=5, max_features=2):
         self.env = env
@@ -69,7 +79,7 @@ class DecisionTree(RL_Algorithm):
         self.max_depth = max_depth
         self.max_features = max_features
         self.decision_tree = DecisionTreeClassifier(max_depth=max_depth, max_features=max_features)
-        self.decision_tree.fit([env.reset()], [-1])
+        self.decision_tree.fit([env.reset()], [0])
 
     def load(self):
         self.decision_tree = self.loadz(f'./models/DecisionTree_{self.env.spec.id}_{self.max_depth}_{self.max_features}')
@@ -86,10 +96,10 @@ class DecisionTree(RL_Algorithm):
     def generate_trajectories(self, n=10, render=False):
         return super().generate_trajectories(self.do_action, self.env, n, render)
 
-    def get_average_reward(self, number_of_tests, render=False):
-        return super().get_average_reward(self.do_action, self.env, number_of_tests, "DecisionTree", render=False)
+    def get_average_reward(self, number_of_tests, state=[], render=False, print=False):
+        return super().get_average_reward(self.do_action, self.env, number_of_tests, "DecisionTree", start_state=state, render=render, printt=print)
 
-class QLearning(RL_Algorithm):
+class QLearning(RL_Agent):
 
     def __init__(self, env: Env, discretize: list):
         self.env = env
@@ -119,25 +129,21 @@ class QLearning(RL_Algorithm):
         else:
             return self.env.action_space.sample() 
 
-    def predict_q(self, state):
-        return np.max(self.Q_table[tuple(self.discretizeState(state))])
-
     def generate_trajectories(self, n=10, render=False):
         return super().generate_trajectories(self.do_action, self.env, n, render)
 
-    def get_average_reward(self, number_of_tests, render=False):
-        return super().get_average_reward(self.do_action, self.env, number_of_tests, "Q_Learning", render=False)
+    def get_average_reward(self, number_of_tests, state=[], render=False, print=False):
+        return super().get_average_reward(self.do_action, self.env, number_of_tests, "Q_Learning", start_state=state, render=render, printt=print)
 
     def train(self, epochs, lr, epsilon, discount):
-        reward_list = []
-        ave_reward_list = []
+        rewards = []
 
         reduction = epsilon / (epochs-epochs/4)
         print('Reduction: ', reduction)
 
         for i in range(epochs):
             done = False
-            tot_reward, reward = 0, 0
+            cum_reward = 0
             state = self.env.reset()
             while done != True:
                 # Randomly do a random action, this will increase exploration in the beginning.
@@ -149,7 +155,7 @@ class QLearning(RL_Algorithm):
                 self.Q_table[tuple(self.discretizeState(state))][action] += delta
 
                 #Update total_reward & update state for new action.
-                tot_reward += reward
+                cum_reward += reward
                 state = state2
 
             # Decay epsilon
@@ -157,12 +163,46 @@ class QLearning(RL_Algorithm):
                 epsilon -= reduction
             
             # Keep track of rewards (No influence on workings of the algorithm)
-            reward_list.append(tot_reward)
+            rewards.append(cum_reward)
             if (i+1) % 100 == 0:
-                ave_reward = np.mean(reward_list)
-                ave_reward_list.append(ave_reward)
-                reward_list = []
-                print('Episode {} Q_table Size: {} Average Reward: {}'.format(i+1, len(self.Q_table), ave_reward))
+                rewards = np.asarray(rewards)
+                print(f'Episode {i+1} Q_table Size: {len(self.Q_table)} Reward -> mean: {rewards.mean()} , std: {rewards.std()}, min: {rewards.min()}, & max: {rewards.max()}')
+                rewards = []
                 
         self.env.close()
         print("Finished training!")
+
+
+
+
+
+class LogRegression:
+    def __init__(self, env: Env):
+        self.discriminator = LogisticRegression()
+        self.discriminator.fit([tuple(list(env.reset()) + [0]), tuple(list(env.reset()) + [1])], [0, 1])
+
+    def predict(self, state_action):
+        return self.discriminator.predict_proba(state_action)[:,1]
+
+    def fit(self, sample_state_actions, sample_labels):
+        self.discriminator.fit(sample_state_actions, sample_labels)
+
+class NeuralNetwork:
+    def __init__(self, env: Env, hidden_dims=[128, 128, 128], learning_rate=0.1):
+        self.env = env
+        self.hidden_dims = hidden_dims
+        self.learning_rate = learning_rate
+
+        self.model = Sequential()
+        self.model.add(Dense(hidden_dims[0], input_dim=self.env.observation_space.shape[0]+1, activation='relu'))
+        for dim in hidden_dims[1:]:
+            self.model.add(Dense(dim, activation='relu'))
+        self.model.add(Dense(1))
+
+        self.model.compile(optimizer='adam', loss=tf.keras.losses.BinaryCrossentropy(), metrics=[tf.keras.metrics.KLDivergence()])
+
+    def predict(self, state_action):
+        return self.model.predict(state_action)
+
+    def fit(self, sample_state_actions, sample_labels):
+        return self.model.fit(sample_state_actions, sample_labels, epochs=10, verbose=0)
