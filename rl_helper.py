@@ -4,11 +4,12 @@ import pickle
 from numpy.core.fromnumeric import size
 from typing import Any
 from sklearn.tree import DecisionTreeClassifier
-import tensorflow as tf
 from sklearn.linear_model import LogisticRegression
 
+import tensorflow as tf
 from keras.models import Sequential
-from keras.layers import Dense
+from keras.optimizer_v2.adam import Adam
+from keras.layers import Dense, Flatten
 
 class RL_Agent():
     def __init__(self, env: Env):
@@ -25,13 +26,15 @@ class RL_Agent():
         with open(file, 'wb') as f:
             pickle.dump(obj, f)
 
-    def generate_trajectories(self, do_action, env:Env, n=10, render=False):
+    def generate_trajectories(self, do_action, env:Env, n=10, render=False, min_reward=-10000):
         trajectories = []
-
-        for i in range(n):
+        i = 0
+        while i < n:
             #Reset Environmnet
             state = env.reset()
             done = False
+            trajectory=[]
+            total_reward=0
             while done == False:
                 if render:
                     env.render()
@@ -40,11 +43,16 @@ class RL_Agent():
                 #perform action in environment
                 next_state, reward, done, info = env.step(action)
         
+                total_reward+=reward
                 #Save state and action to memory
-                trajectories.append((state, action))
+                trajectory.append((state, action))
 
                 state = next_state
-                
+
+            if total_reward > min_reward:
+                trajectories.extend(trajectory)
+                i+=1
+
             env.close()
             #save trajectory and actions to large memory
         return trajectories
@@ -65,7 +73,7 @@ class RL_Agent():
                 state, reward, done, info = env.step(action)
                 game_reward += reward
             rewards.append(game_reward)
-            
+        env.close()
         rewards = np.asarray(rewards)
         if printt:
                 print(f'Reward of {actor} with {number_of_tests} tests -> mean: {rewards.mean()}, std: {rewards.std()}, min: {rewards.min()}, & max: {rewards.max()}')
@@ -79,7 +87,7 @@ class DecisionTree(RL_Agent):
         self.max_depth = max_depth
         self.max_features = max_features
         self.decision_tree = DecisionTreeClassifier(max_depth=max_depth, max_features=max_features)
-        self.decision_tree.fit([env.reset()], [0])
+        self.decision_tree.fit([env.reset(), env.reset()], [0, 1])
 
     def load(self):
         self.decision_tree = self.loadz(f'./models/DecisionTree_{self.env.spec.id}_{self.max_depth}_{self.max_features}')
@@ -101,20 +109,24 @@ class DecisionTree(RL_Agent):
 
 class QLearning(RL_Agent):
 
-    def __init__(self, env: Env, discretize: list):
+    def __init__(self, env: Env, discretize: list, discount: float):
         self.env = env
         self.env.reset()
         self.discretize = discretize
-
+        self.discount = discount
         self.Q_table = {}
 
     def load(self):
         discretize = '_'.join(map(str, self.discretize))
-        self.Q_table = self.loadz(f'./models/Q_Table_{self.env.spec.id}_{discretize}')
+        discount = str(self.discount).replace(".", '-')
+        loadedQ = self.loadz(f'./models/Q_Table_{self.env.spec.id}_{discretize}_{discount}')
+        if isinstance(loadedQ, dict):
+            self.Q_table = loadedQ
 
     def save(self):
         discretize = '_'.join(map(str, self.discretize))
-        self.savez(self.Q_table, f'./models/Q_Table_{self.env.spec.id}_{discretize}')
+        discount = str(self.discount).replace(".", '-')
+        self.savez(self.Q_table, f'./models/Q_Table_{self.env.spec.id}_{discretize}_{discount}')
 
     def discretizeState(self, state):
         state_adj = state*np.array(self.discretize)
@@ -129,16 +141,16 @@ class QLearning(RL_Agent):
         else:
             return self.env.action_space.sample() 
 
-    def generate_trajectories(self, n=10, render=False):
-        return super().generate_trajectories(self.do_action, self.env, n, render)
+    def generate_trajectories(self, n=10, render=False, min_reward=-10000):
+        return super().generate_trajectories(self.do_action, self.env, n, render, min_reward)
 
     def get_average_reward(self, number_of_tests, state=[], render=False, print=False):
         return super().get_average_reward(self.do_action, self.env, number_of_tests, "Q_Learning", start_state=state, render=render, printt=print)
 
-    def train(self, epochs, lr, epsilon, discount):
+    def train(self, epochs, lr, epsilon):
         rewards = []
 
-        reduction = epsilon / (epochs-epochs/4)
+        reduction = epsilon / epochs
         print('Reduction: ', reduction)
 
         for i in range(epochs):
@@ -151,7 +163,7 @@ class QLearning(RL_Agent):
 
                 state2, reward, done, info = self.env.step(action)
 
-                delta = lr*(reward + discount*np.max(self.Q_table[tuple(self.discretizeState(state2))]) - self.Q_table[tuple(self.discretizeState(state))][action])
+                delta = lr*(reward + self.discount*np.max(self.Q_table[tuple(self.discretizeState(state2))]) - self.Q_table[tuple(self.discretizeState(state))][action])
                 self.Q_table[tuple(self.discretizeState(state))][action] += delta
 
                 #Update total_reward & update state for new action.
@@ -159,16 +171,19 @@ class QLearning(RL_Agent):
                 state = state2
 
             # Decay epsilon
-            if epsilon > 0:
+            if epsilon > 0.05:
                 epsilon -= reduction
             
             # Keep track of rewards (No influence on workings of the algorithm)
             rewards.append(cum_reward)
             if (i+1) % 100 == 0:
                 rewards = np.asarray(rewards)
-                print(f'Episode {i+1} Q_table Size: {len(self.Q_table)} Reward -> mean: {rewards.mean()} , std: {rewards.std()}, min: {rewards.min()}, & max: {rewards.max()}')
+                print(f'Episode {i+1}: Q_table Size: {len(self.Q_table)} Reward -> mean: {rewards.mean()} , std: {rewards.std()}, min: {rewards.min()}, & max: {rewards.max()}')
                 rewards = []
-                
+            if (i+1) % 1000 == 0:
+                self.save()
+                print(f'Episode {i+1}: Saved the Q_table.')
+
         self.env.close()
         print("Finished training!")
 
@@ -188,21 +203,44 @@ class LogRegression:
         self.discriminator.fit(sample_state_actions, sample_labels)
 
 class NeuralNetwork:
-    def __init__(self, env: Env, hidden_dims=[128, 128, 128], learning_rate=0.1):
+    def __init__(self, env: Env, hidden_dims=[128, 128, 128], epochs=10, learning_rate=0.1):
         self.env = env
         self.hidden_dims = hidden_dims
+        self.epochs = epochs
         self.learning_rate = learning_rate
 
         self.model = Sequential()
         self.model.add(Dense(hidden_dims[0], input_dim=self.env.observation_space.shape[0]+1, activation='relu'))
         for dim in hidden_dims[1:]:
             self.model.add(Dense(dim, activation='relu'))
-        self.model.add(Dense(1))
+        self.model.add(Dense(1, activation='sigmoid'))
 
-        self.model.compile(optimizer='adam', loss=tf.keras.losses.BinaryCrossentropy(), metrics=[tf.keras.metrics.KLDivergence()])
+        self.optimizer = tf.keras.optimizers.Adam()
+        self.cross_entropy = tf.keras.losses.BinaryCrossentropy()
+        
+        # self.model.compile(optimizer=self.optimizer, loss=self.cross_entropy, metrics=[tf.keras.metrics.KLDivergence()])
 
     def predict(self, state_action):
-        return self.model.predict(state_action)
+        return self.model(state_action)
 
-    def fit(self, sample_state_actions, sample_labels):
-        return self.model.fit(sample_state_actions, sample_labels, epochs=10, verbose=0)
+    def discriminator_loss(self, expert_output, generator_output):
+        expert_loss = self.cross_entropy(tf.ones_like(expert_output), expert_output)
+        generator_loss = self.cross_entropy(tf.zeros_like(generator_output), generator_output)
+        total_loss = expert_loss + generator_loss
+        return total_loss
+
+    @tf.function
+    def fit(self, expert_state_actions, generator_state_actions):
+        for i in range(self.epochs):
+            with tf.GradientTape() as disc_tape:
+                real_output = self.model(expert_state_actions, training=True)
+                fake_output = self.model(generator_state_actions, training=True)
+
+                disc_loss = self.discriminator_loss(real_output, fake_output)
+
+                gradients_of_discriminator = disc_tape.gradient(disc_loss, self.model.trainable_variables)
+                self.optimizer.apply_gradients(zip(gradients_of_discriminator, self.model.trainable_variables))
+
+    # Yes, successive calls to fit will incrementally train the model.
+    # def fit(self, sample_state_actions, sample_labels):
+    #     return self.model.fit(sample_state_actions, sample_labels, epochs=self.epochs, verbose=0)
