@@ -9,24 +9,9 @@ digraph G {
     node [margin="0.03" penwidth="0.5" width=.1, height=.1];
     edge [arrowsize=.4 penwidth="0.3"]
 
-    node1 [margin="0" shape=none label=<<table border="0">
-            
-            <tr>
-                    <td><img src="C:\Users\caspa\AppData\Local\Temp/node1_9084.svg"/></td>
-            </tr>
-            </table>>]
-	node4 [margin="0" shape=none label=<<table border="0">
-            
-            <tr>
-                    <td><img src="C:\Users\caspa\AppData\Local\Temp/node4_9084.svg"/></td>
-            </tr>
-            </table>>]
-	node0 [margin="0" shape=none label=<<table border="0">
-            
-            <tr>
-                    <td><img src="C:\Users\caspa\AppData\Local\Temp/node0_9084.svg"/></td>
-            </tr>
-            </table>>]
+    node1 [margin="0" shape=none label=<<font face="Helvetica" color="#444443" point-size="12">Pole Angle@0.04</font>>]
+	node4 [margin="0" shape=none label=<<font face="Helvetica" color="#444443" point-size="12">Pole Angle@-0.03</font>>]
+	node0 [margin="0" shape=none label=<<font face="Helvetica" color="#444443" point-size="12">Pole Angular Velocity@-0.02</font>>]
     node1 -> leaf2 [penwidth=0.3 color="#444443" label=<>]
 	node1 -> leaf3 [penwidth=0.3 color="#444443" label=<>]
 	
@@ -54,25 +39,25 @@ digraph G {
     leaf2 [margin="0" shape=box penwidth="0" color="#444443" label=<<table border="0" CELLBORDER="0">
         
         <tr>
-                <td><img src="C:\Users\caspa\AppData\Local\Temp/leaf2_9084.svg"/></td>
+                <td><img src="C:\Users\caspa\AppData\Local\Temp/leaf2_16324.svg"/></td>
         </tr>
         </table>>]
 	leaf3 [margin="0" shape=box penwidth="0" color="#444443" label=<<table border="0" CELLBORDER="0">
         
         <tr>
-                <td><img src="C:\Users\caspa\AppData\Local\Temp/leaf3_9084.svg"/></td>
+                <td><img src="C:\Users\caspa\AppData\Local\Temp/leaf3_16324.svg"/></td>
         </tr>
         </table>>]
 	leaf5 [margin="0" shape=box penwidth="0" color="#444443" label=<<table border="0" CELLBORDER="0">
         
         <tr>
-                <td><img src="C:\Users\caspa\AppData\Local\Temp/leaf5_9084.svg"/></td>
+                <td><img src="C:\Users\caspa\AppData\Local\Temp/leaf5_16324.svg"/></td>
         </tr>
         </table>>]
 	leaf6 [margin="0" shape=box penwidth="0" color="#444443" label=<<table border="0" CELLBORDER="0">
         
         <tr>
-                <td><img src="C:\Users\caspa\AppData\Local\Temp/leaf6_9084.svg"/></td>
+                <td><img src="C:\Users\caspa\AppData\Local\Temp/leaf6_16324.svg"/></td>
         </tr>
         </table>>]
 
@@ -83,7 +68,7 @@ digraph G {
                 
         <table border="0" cellspacing="0" cellpadding="0">
             <tr>
-                <td border="0" cellspacing="0" cellpadding="0"><img src="C:\Users\caspa\AppData\Local\Temp/legend_9084.svg"/></td>
+                <td border="0" cellspacing="0" cellpadding="0"><img src="C:\Users\caspa\AppData\Local\Temp/legend_16324.svg"/></td>
             </tr>
         </table>
         
