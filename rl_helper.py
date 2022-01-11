@@ -93,19 +93,18 @@ class RL_Agent():
 
 class DecisionTree(RL_Agent):
 
-    def __init__(self, env: Env, max_depth=5, max_features=2):
+    def __init__(self, env: Env, max_depth=5):
         self.env = env
         self.env.reset()
         self.max_depth = max_depth
-        self.max_features = max_features
-        self.decision_tree = DecisionTreeClassifier(max_depth=max_depth, max_features=max_features)
+        self.decision_tree = DecisionTreeClassifier(max_depth=max_depth)
         self.decision_tree.fit([env.reset(), env.reset()], [0, 1])
 
     def load(self):
-        self.decision_tree = self.loadz(f'./models/DecisionTree_{self.env.spec.id}_{self.max_depth}_{self.max_features}')
+        self.decision_tree = self.loadz(f'./models/DecisionTree_{self.env.spec.id}_{self.max_depth}')
 
-    def save(self):
-        self.savez(self.decision_tree, f'./models/DecisionTree_{self.env.spec.id}_{self.max_depth}_{self.max_features}')
+    def save(self, extra):
+        self.savez(self.decision_tree, f'./models/DecisionTree_{self.env.spec.id}_{self.max_depth}_{extra}')
 
     def do_action(self, state):
         return self.decision_tree.predict([state])[0]
@@ -121,17 +120,25 @@ class DecisionTree(RL_Agent):
 
 class DQN(RL_Agent):
 
-    def __init__(self, env:Env, memory_size):
+    def __init__(self, env:Env, memory_size, batch_size):
         self.env = env
         self.env.reset()
 
         self.environment = Environment.create(environment='gym', level=self.env.spec.id)
+        network_spec = [
+            dict(type='dense', size=64), 
+            dict(type='dense', size=64),
+            dict(type='dense', size=64)
+            ]
 
         self.agent = Agent.create(
-            agent='ppo',
-            environment=self.environment,
-            memory='minimum',
-            batch_size=12
+            agent='dqn',
+            states=self.environment.states(),
+            actions=self.environment.actions(),
+            max_episode_timesteps=500,
+            memory=memory_size,
+            batch_size=batch_size,
+            network=network_spec
         )
 
     def load(self):
@@ -306,12 +313,11 @@ class DiscriminatorNN:
                 gradients_of_discriminator = disc_tape.gradient(disc_loss, self.model.trainable_variables)
                 self.optimizer.apply_gradients(zip(gradients_of_discriminator, self.model.trainable_variables))
 
-    ## Yes, successive calls to fit will incrementally train the model.
-    # def fit_label(self, sample_state_actions, sample_labels):
-    #     for i in range(self.epochs):
-    #         with tf.GradientTape() as disc_tape:
-    #             output = self.model(sample_state_actions, training=True)
-    #             disc_loss = self.cross_entropy(sample_labels, output)
+    def fit_label(self, sample_state_actions, sample_labels):
+        for i in range(self.epochs):
+            with tf.GradientTape() as disc_tape:
+                output = self.model(sample_state_actions, training=True)
+                disc_loss = self.cross_entropy(sample_labels, output)
 
-    #             gradients_of_discriminator = disc_tape.gradient(disc_loss, self.model.trainable_variables)
-    #             self.optimizer.apply_gradients(zip(gradients_of_discriminator, self.model.trainable_variables))
+                gradients_of_discriminator = disc_tape.gradient(disc_loss, self.model.trainable_variables)
+                self.optimizer.apply_gradients(zip(gradients_of_discriminator, self.model.trainable_variables))
