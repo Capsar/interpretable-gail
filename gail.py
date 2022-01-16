@@ -1,11 +1,14 @@
+from numpy.core.fromnumeric import argmax
 from rl_helper import DQN, QLearning, DecisionTree, DiscriminatorNN
 import numpy as np
-from scipy.spatial import distance
+import copy
 
-def do_gail(expert: DQN or QLearning, generator: DecisionTree, discriminator: DiscriminatorNN, n_e_trajectories=(20,5), epochs=10, ownGeneratorTrajectories=False, hasAccessToExpert=False, sampleWithQ=False, discriminateWithQ=True, pprint=False):
+def do_gail(expert:DQN, generator: DecisionTree, discriminator: DiscriminatorNN, n_e_trajectories=(20,5), epochs=10, ownGeneratorTrajectories=False, hasAccessToExpert=False, sampleWithQ=False, discriminateWithQ=True, pprint=False):
     
     # Generate expert data from expert model
     expert_trajectories = expert.generate_trajectories(n_e_trajectories[0])
+    results = []
+    decisionTrees = []
     # expert_state_actions = [tuple(list(s) + [a]) for s,a in expert_trajectories]
     val_ratio = 0.2
     if pprint:
@@ -13,7 +16,7 @@ def do_gail(expert: DQN or QLearning, generator: DecisionTree, discriminator: Di
 
     number_of_tests = 100
 
-    expert_mean, expert_std = expert.get_average_reward(number_of_tests, print=False)
+    expert_mean, expert_std = expert.get_average_reward(number_of_tests, print=pprint)
     if pprint:
         print('------------------------------------------------------------------------------')
 
@@ -22,7 +25,9 @@ def do_gail(expert: DQN or QLearning, generator: DecisionTree, discriminator: Di
         if pprint:
             print('Epoch: ', i+1, 'with', len(expert_trajectories), 'expert state action pairs.')
             print("Decision Tree depth:", generator.decision_tree.get_depth(), '#leave nodes:', generator.decision_tree.get_n_leaves())
-        generator_mean, generator_std = generator.get_average_reward(number_of_tests, print=False)
+        generator_mean, generator_std = generator.get_average_reward(number_of_tests, print=pprint)
+        results.append(generator_mean)
+        decisionTrees.append(copy.deepcopy(generator))
         if generator_mean >= expert_mean and generator_std <= expert_std:
             if pprint:
                 print("Found a better reward by generator.")
@@ -43,18 +48,17 @@ def do_gail(expert: DQN or QLearning, generator: DecisionTree, discriminator: Di
         else:
             generator_trajectories = [(s, generator.do_action(s)) for s,_ in expert_trajectories]
             generator_state_actions = np.asarray([(list(s) + [generator.do_action(s)]) for s,_ in expert_trajectories])
-    
+
+        sample_qs = []
         if discriminateWithQ:
             expert_qs = [expert.get_average_reward(1, s, a)[0] for s,a in expert_trajectories]
             generator_qs = [generator.get_average_reward(1, s, a)[0] for s,a in generator_trajectories]
 
-            sample_qs = []
             sample_qs.extend(expert_qs)
             sample_qs.extend(generator_qs)
             sample_qs = np.asarray(sample_qs)
 
-            sample_qs = sample_qs + min(sample_qs)
-            sample_qs = sample_qs / max(sample_qs)
+            sample_qs = (sample_qs - min(sample_qs)) / (max(sample_qs) - min(sample_qs))
 
             expert_qs = sample_qs[:len(expert_qs)]
             generator_qs = sample_qs[len(expert_qs):]
@@ -83,16 +87,16 @@ def do_gail(expert: DQN or QLearning, generator: DecisionTree, discriminator: Di
         if sampleWithQ:
             if pprint:
                 print("Going to sample the expert and generator data on Cumulative Reward")
-            expert_qs = [expert.get_average_reward(1, s, a)[0] for s,a in expert_trajectories]
-            generator_qs = [generator.get_average_reward(1, s, a)[0] for s,a in generator_trajectories]
+            if not discriminateWithQ:
+                expert_qs = [expert.get_average_reward(1, s, a)[0] for s,a in expert_trajectories]
+                generator_qs = [generator.get_average_reward(1, s, a)[0] for s,a in generator_trajectories]
 
-            sample_qs = []
-            sample_qs.extend(expert_qs)
-            sample_qs.extend(generator_qs)
-            sample_qs = np.asarray(sample_qs)
+                sample_qs = []
+                sample_qs.extend(expert_qs)
+                sample_qs.extend(generator_qs)
+                sample_qs = np.asarray(sample_qs)
 
-            sample_qs = sample_qs + min(sample_qs)
-            sample_qs = sample_qs / max(sample_qs)
+                sample_qs = (sample_qs - min(sample_qs)) / (max(sample_qs) - min(sample_qs))
             sample_qs = sample_qs / np.sum(sample_qs)
 
             idx = np.random.choice(len(sample_state_actions), size=len(sample_state_actions), p=sample_qs)
@@ -120,4 +124,10 @@ def do_gail(expert: DQN or QLearning, generator: DecisionTree, discriminator: Di
             expert_trajectories.extend([(s, expert.do_action(s)) for s,_ in generator_trajectories])
         if pprint:
             print('')
-    return generator, expert_trajectories
+    if pprint:
+        print("Decision Tree depth:", generator.decision_tree.get_depth(), '#leave nodes:', generator.decision_tree.get_n_leaves())
+    generator_mean, generator_std = generator.get_average_reward(number_of_tests, print=pprint)
+    results.append(generator_mean)
+    decisionTrees.append(copy.deepcopy(generator))
+
+    return decisionTrees[argmax(results)], expert_trajectories, results

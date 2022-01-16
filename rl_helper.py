@@ -68,8 +68,14 @@ class RL_Agent():
         for ii in range(number_of_tests):
             state = env.reset()
             if len(start_state) != 0:
-                env.state = env.unwrapped.state = start_state
+                if env.spec.id == 'Acrobot-v1':
+                    # print(env.unwrapped.state, np.array([np.arcsin(state[1]), np.arcsin(state[3]), state[4], state[5]], dtype=np.float32))
+                    env.state = env.unwrapped.state = [np.arcsin(start_state[1]), np.arcsin(start_state[3]), start_state[4], start_state[5]]
+                else:
+                    env.state = env.unwrapped.state = start_state
+
                 state = start_state
+                
             do_start_action = False
             if start_action != -1:
                 do_start_action = True
@@ -82,7 +88,9 @@ class RL_Agent():
                 action = do_action(state)
                 if do_start_action:
                     action = start_action
-                state, reward, done, info = env.step(action)
+                    do_start_action = False
+                state, reward, done, _ = env.step(action)
+
                 game_reward += reward
             rewards.append(game_reward)
         env.close()
@@ -109,6 +117,9 @@ class DecisionTree(RL_Agent):
     def do_action(self, state):
         return self.decision_tree.predict([state])[0]
 
+    def get_P(self, state, action):
+        return self.decision_tree.predict_proba([state])[0][action]
+
     def fit(self, new_generator_s, new_generator_a):
         self.decision_tree.fit(new_generator_s, new_generator_a)
 
@@ -130,15 +141,18 @@ class DQN(RL_Agent):
             dict(type='dense', size=64),
             dict(type='dense', size=64)
             ]
+        # print('states', self.environment.states())
+        # print('actions', self.environment.actions())
 
         self.agent = Agent.create(
             agent='dqn',
             states=self.environment.states(),
             actions=self.environment.actions(),
-            max_episode_timesteps=500,
+            max_episode_timesteps=self.env._max_episode_steps,
             memory=memory_size,
             batch_size=batch_size,
-            network=network_spec
+            network=network_spec,
+            tracking='all'
         )
 
     def load(self):
@@ -148,7 +162,17 @@ class DQN(RL_Agent):
         self.agent.save(directory=f'./models/Tensorforce_{self.env.spec.id}', filename=f'Tensorforce_ {self.env.spec.id}', format='checkpoint')
 
     def do_action(self, state):
-        return self.agent.act(state, independent=True)
+        return self.agent.act(state, independent=True, deterministic=True)
+
+    def get_P(self, state, action):
+        self.agent.act(states=state, independent=True, deterministic=True)
+        action_values = self.agent.tracked_tensors()['agent/policy/action-values']
+        action_values = action_values / np.sum(action_values)
+        if action_values[action] < 0:
+            print(self.agent.tracked_tensors())
+            action_values
+
+        return action_values[action]
 
     def generate_trajectories(self, n=10, render=False):
         return super().generate_trajectories(self.do_action, self.env, n, render)
