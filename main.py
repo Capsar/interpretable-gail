@@ -28,11 +28,11 @@ print('')
 # q_learner.train(300000, lr=0.1, epsilon=0.3)
 # q_learner.save()
 
-memory_size, batch_size = 200000, 32
+memory_size, batch_size = 250000, 128
 tensorforce_agent = DQN(env, memory_size, batch_size)
 # tensorforce_agent.load()
-# tensorforce_agent.train(2500)
-# tensorforce_agent.save()
+tensorforce_agent.train(5000)
+tensorforce_agent.save()
 
 doGAIL = True
 if doGAIL:

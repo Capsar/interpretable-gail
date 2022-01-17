@@ -146,9 +146,7 @@ class DQN(RL_Agent):
 
         self.agent = Agent.create(
             agent='dqn',
-            states=self.environment.states(),
-            actions=self.environment.actions(),
-            max_episode_timesteps=self.env._max_episode_steps,
+            environment=self.environment,
             memory=memory_size,
             batch_size=batch_size,
             network=network_spec,
@@ -168,11 +166,7 @@ class DQN(RL_Agent):
         self.agent.act(states=state, independent=True, deterministic=True)
         action_values = self.agent.tracked_tensors()['agent/policy/action-values']
         action_values = action_values / np.sum(action_values)
-        if action_values[action] < 0:
-            print(self.agent.tracked_tensors())
-            action_values
-
-        return action_values[action]
+        return min(action_values[action], 0)
 
     def generate_trajectories(self, n=10, render=False):
         return super().generate_trajectories(self.do_action, self.env, n, render)

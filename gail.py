@@ -90,21 +90,17 @@ def do_gail(expert:DQN, generator: DecisionTree, discriminator: DiscriminatorNN,
                 expert_qs = [expert.get_P(s, a) for s,a in expert_trajectories]
                 generator_qs = [generator.get_P(s, a) for s,a in generator_trajectories]
                 
-                print([p if p  < 0 else '' for p in expert_qs])
-
                 sample_qs = []
                 sample_qs.extend(expert_qs)
                 sample_qs.extend(generator_qs)
                 sample_qs = np.asarray(sample_qs)
             
-            print([p if p  < 0 else '' for p in sample_qs])
-
             sample_qs = sample_qs / np.sum(sample_qs)
 
             idx = np.random.choice(len(sample_state_actions), size=len(sample_state_actions), p=sample_qs)
             sample_state_actions = np.asarray([sample_state_actions[i] for i in idx])
-
-
+        
+        length = len(expert_state_actions)
         ## Get all state action pairs classified as expert data by the discriminator
         new_generator_s, new_generator_a = [], []
         for s_a, p_expert in list(zip(sample_state_actions, discriminator.predict(sample_state_actions))):
