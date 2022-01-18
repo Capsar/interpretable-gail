@@ -32,48 +32,19 @@ class RL_Agent():
         with open(file, 'wb') as f:
             pickle.dump(obj, f)
 
-    def generate_trajectories(self, do_action, env:Env, n=10, render=False, min_reward=-10000):
+    def do_rollout(self, do_action, env:Env, n, agent_name, start_state, start_action, render, pprint):
         trajectories = []
-        i = 0
-        while i < n:
-            #Reset Environmnet
-            state = env.reset()
-            done = False
-            trajectory=[]
-            total_reward=0
-            while done == False:
-                if render:
-                    env.render()
-                action = do_action(state)
-
-                #perform action in environment
-                next_state, reward, done, info = env.step(action)
-        
-                total_reward+=reward
-                #Save state and action to memory
-                trajectory.append((state, action))
-
-                state = next_state
-
-            if total_reward > min_reward:
-                trajectories.extend(trajectory)
-                i+=1
-
-            env.close()
-            #save trajectory and actions to large memory
-        return trajectories
-
-    def get_average_reward(self, do_action, env:Env, number_of_tests, actor, start_state=[], start_action=-1, render=False, printt=False):
         rewards = []
-        for ii in range(number_of_tests):
+        for ii in range(n):
             state = env.reset()
+            trajectory=[]
+
+            #Init state
             if len(start_state) != 0:
                 if env.spec.id == 'Acrobot-v1':
-                    # print(env.unwrapped.state, np.array([np.arcsin(state[1]), np.arcsin(state[3]), state[4], state[5]], dtype=np.float32))
                     env.state = env.unwrapped.state = [np.arcsin(start_state[1]), np.arcsin(start_state[3]), start_state[4], start_state[5]]
                 else:
                     env.state = env.unwrapped.state = start_state
-
                 state = start_state
                 
             do_start_action = False
@@ -89,15 +60,85 @@ class RL_Agent():
                 if do_start_action:
                     action = start_action
                     do_start_action = False
-                state, reward, done, _ = env.step(action)
 
+                state, reward, done, _ = env.step(action)
+                trajectory.append((state, action))
                 game_reward += reward
+
+            trajectories.extend(trajectory)
             rewards.append(game_reward)
         env.close()
         rewards = np.asarray(rewards)
-        if printt:
-                print(f'Reward of {actor} with {number_of_tests} tests -> mean: {rewards.mean()}, std: {rewards.std()}, min: {rewards.min()}, & max: {rewards.max()}')
-        return rewards.mean(), rewards.std()
+        if pprint:
+                print(f'Reward of {agent_name} with {n} tests -> mean: {rewards.mean()}, std: {rewards.std()}, min: {rewards.min()}, & max: {rewards.max()}')
+        return rewards.mean(), rewards.std(), trajectories
+
+    # def generate_trajectories(self, do_action, env:Env, n=10, render=False, min_reward=-10000):
+    #     trajectories = []
+    #     i = 0
+    #     while i < n:
+    #         #Reset Environmnet
+    #         state = env.reset()
+    #         done = False
+    #         trajectory=[]
+    #         total_reward=0
+    #         while done == False:
+    #             if render:
+    #                 env.render()
+    #             action = do_action(state)
+
+    #             #perform action in environment
+    #             next_state, reward, done, info = env.step(action)
+        
+    #             total_reward+=reward
+    #             #Save state and action to memory
+    #             trajectory.append((state, action))
+
+    #             state = next_state
+
+    #         if total_reward > min_reward:
+    #             trajectories.extend(trajectory)
+    #             i+=1
+
+    #         env.close()
+    #         #save trajectory and actions to large memory
+    #     return trajectories
+
+    # def get_average_reward(self, do_action, env:Env, number_of_tests, actor, start_state=[], start_action=-1, render=False, printt=False):
+    #     rewards = []
+    #     for ii in range(number_of_tests):
+    #         state = env.reset()
+    #         if len(start_state) != 0:
+    #             if env.spec.id == 'Acrobot-v1':
+    #                 # print(env.unwrapped.state, np.array([np.arcsin(state[1]), np.arcsin(state[3]), state[4], state[5]], dtype=np.float32))
+    #                 env.state = env.unwrapped.state = [np.arcsin(start_state[1]), np.arcsin(start_state[3]), start_state[4], start_state[5]]
+    #             else:
+    #                 env.state = env.unwrapped.state = start_state
+
+    #             state = start_state
+                
+    #         do_start_action = False
+    #         if start_action != -1:
+    #             do_start_action = True
+
+    #         game_reward = 0
+    #         done = False
+    #         while done == False:
+    #             if render:
+    #                 env.render()
+    #             action = do_action(state)
+    #             if do_start_action:
+    #                 action = start_action
+    #                 do_start_action = False
+    #             state, reward, done, _ = env.step(action)
+
+    #             game_reward += reward
+    #         rewards.append(game_reward)
+    #     env.close()
+    #     rewards = np.asarray(rewards)
+    #     if printt:
+    #             print(f'Reward of {actor} with {number_of_tests} tests -> mean: {rewards.mean()}, std: {rewards.std()}, min: {rewards.min()}, & max: {rewards.max()}')
+    #     return rewards.mean(), rewards.std()
 
 class DecisionTree(RL_Agent):
 
@@ -105,7 +146,7 @@ class DecisionTree(RL_Agent):
         self.env = env
         self.env.reset()
         self.max_depth = max_depth
-        self.decision_tree = DecisionTreeClassifier(max_depth=max_depth)
+        self.decision_tree = DecisionTreeClassifier(max_depth=max_depth, ccp_alpha=0.013)
         self.decision_tree.fit([env.reset(), env.reset()], [0, 1])
 
     def load(self):
@@ -117,17 +158,15 @@ class DecisionTree(RL_Agent):
     def do_action(self, state):
         return self.decision_tree.predict([state])[0]
 
-    def get_P(self, state, action):
-        return self.decision_tree.predict_proba([state])[0][action]
+    def do_rollout(self, n=1, state=[], action=-1, render=False, print=False):
+        return super().do_rollout(self.do_action, self.env, n, "DecisionTree", start_state=state, start_action=action, render=render, pprint=print)
 
     def fit(self, new_generator_s, new_generator_a):
         self.decision_tree.fit(new_generator_s, new_generator_a)
 
-    def generate_trajectories(self, n=10, render=False):
-        return super().generate_trajectories(self.do_action, self.env, n, render)
-
-    def get_average_reward(self, number_of_tests, state=[], action=-1, render=False, print=False):
-        return super().get_average_reward(self.do_action, self.env, number_of_tests, "DecisionTree", start_state=state, start_action=action, render=render, printt=print)
+    def score(self, states, real_actions):
+        score = np.mean([1 if self.do_action(state) == real_action else 0 for state,real_action in zip(states, real_actions)])
+        return score
 
 class DQN(RL_Agent):
 
@@ -138,9 +177,8 @@ class DQN(RL_Agent):
         self.environment = Environment.create(environment='gym', level=self.env.spec.id)
         network_spec = [
             dict(type='dense', size=64), 
-            dict(type='dense', size=64),
             dict(type='dense', size=64)
-            ]
+        ]
         # print('states', self.environment.states())
         # print('actions', self.environment.actions())
 
@@ -166,15 +204,12 @@ class DQN(RL_Agent):
         self.agent.act(states=state, independent=True, deterministic=True)
         action_values = self.agent.tracked_tensors()['agent/policy/action-values']
         action_values = action_values / np.sum(action_values)
-        return min(action_values[action], 0)
+        return action_values[action] - min(action_values)
 
-    def generate_trajectories(self, n=10, render=False):
-        return super().generate_trajectories(self.do_action, self.env, n, render)
+    def do_rollout(self, n=1, state=[], action=-1, render=False, print=False):
+        return super().do_rollout(self.do_action, self.env, n, "TensorForce", start_state=state, start_action=action, render=render, pprint=print)
 
-    def get_average_reward(self, number_of_tests, state=[], action=-1, render=False, print=False):
-        return super().get_average_reward(self.do_action, self.env, number_of_tests, "TensorForce", start_state=state, start_action=action, render=render, printt=print)
-
-    def train(self, epochs, number=10):
+    def train(self, epochs, reward_stop, number=10):
         total_reward = 0
         for i in range(1, epochs):
             
@@ -188,6 +223,8 @@ class DQN(RL_Agent):
 
             if i % number == 0:
                 print('episode:', i, '/', epochs, "total reward:", total_reward/number)
+                if total_reward/number > reward_stop:
+                    break
                 total_reward = 0
 
 class QLearning(RL_Agent):
@@ -224,11 +261,8 @@ class QLearning(RL_Agent):
         else:
             return self.env.action_space.sample() 
 
-    def generate_trajectories(self, n=10, render=False, min_reward=-10000):
-        return super().generate_trajectories(self.do_action, self.env, n, render, min_reward)
-
-    def get_average_reward(self, number_of_tests, state=[], action=-1, render=False, print=False):
-        return super().get_average_reward(self.do_action, self.env, number_of_tests, "Q_Learning", start_state=state, start_action=action, render=render, printt=print)
+    def do_rollout(self, n=1, state=[], action=-1, render=False, print=False):
+        return super().do_rollout(self.do_action, self.env, n, "Q_Learning", start_state=state, start_action=action, render=render, pprint=print)
 
     def train(self, epochs, lr, epsilon, max_steps=-1):
         rewards = []
