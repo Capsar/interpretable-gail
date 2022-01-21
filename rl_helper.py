@@ -145,7 +145,7 @@ class DecisionTree(RL_Agent):
         self.env = env
         self.env.reset()
         self.max_depth = max_depth
-        self.decision_tree = DecisionTreeClassifier(max_depth=max_depth)
+        self.decision_tree = DecisionTreeClassifier(max_depth=max_depth, ccp_alpha=0.013)
         self.decision_tree.fit([env.reset(), env.reset()], [0, 1])
 
     def load(self, extra):
