@@ -4,14 +4,14 @@ from rl_helper import DQN, QLearning, DecisionTree, DiscriminatorNN
 import numpy as np
 import copy
 
-def do_gail(expert:DQN, generator: DecisionTree, discriminator: DiscriminatorNN, expert_trajectories=[], n_e_trajectories=(1,1), epochs=5, ownGeneratorTrajectories=False, hasAccessToExpert=False, sampleWithQ=False, discriminateWithQ=True, pprint=False):
+def do_gail(expert:DQN, generator: DecisionTree, discriminator: DiscriminatorNN, expert_trajectories=[], n_e_trajectories=(1,1), epochs=10, ownGeneratorTrajectories=False, hasAccessToExpert=False, sampleWithQ=False, discriminateWithQ=False, pprint=False):
     
-    # Generate expert data from expert model
+    # Generate expert data from expert model if none is provided.
     if len(expert_trajectories) == 0:
         _, _, expert_trajectories = expert.do_rollout(n=n_e_trajectories[0])
+
     results = []
     decisionTrees = []
-    # expert_state_actions = [tuple(list(s) + [a]) for s,a in expert_trajectories]
     val_ratio = 0.2
     if pprint:
         print('Number of expert state-action pairs:', len(expert_trajectories))
@@ -44,7 +44,8 @@ def do_gail(expert:DQN, generator: DecisionTree, discriminator: DiscriminatorNN,
         if ownGeneratorTrajectories:
             generator_trajectories = []
             while len(generator_trajectories) < len(expert_trajectories):
-                generator_trajectories.extend(generator.do_rollout(n=n_e_trajectories[0]))
+                _, _, t = generator.do_rollout(n=n_e_trajectories[0])
+                generator_trajectories.extend(t)
             generator_trajectories = generator_trajectories[:len(expert_trajectories)]
             generator_state_actions = np.asarray([np.asarray(list(s) + [a]) for s,a in generator_trajectories])
         else:
@@ -53,8 +54,8 @@ def do_gail(expert:DQN, generator: DecisionTree, discriminator: DiscriminatorNN,
 
         sample_qs = []
         if discriminateWithQ:
-            expert_qs = [expert.get_P(s, a) for s,a in expert_trajectories]
-            generator_qs = [expert.get_P(s, a) for s,a in generator_trajectories]
+            expert_qs = [expert.get_P(s) for s,_ in expert_trajectories]
+            generator_qs = [expert.get_P(s) for s,_ in generator_trajectories]
 
             sample_qs.extend(expert_qs)
             sample_qs.extend(generator_qs)
@@ -66,7 +67,7 @@ def do_gail(expert:DQN, generator: DecisionTree, discriminator: DiscriminatorNN,
             expert_state_actions = np.asarray([np.asarray(list(s) + [a] + [q]) for (s,a),q in list(zip(expert_trajectories, expert_qs))])
             generator_state_actions = np.asarray([np.asarray(list(s) + [a] + [q]) for (s,a),q in list(zip(generator_trajectories, generator_qs))])
             if pprint:
-                print("Extended the expert and generator state-action pairs with their normalised cumulative reward, resulting in state-action-reward pairs.")
+                print("Extended the expert and generator state-action pairs with their the difference in probability of best and worst action: action cost, resulting in state-action-actionCost pairs.")
         if pprint:
             print('Training discriminator on expert=1 or generator=0. train:', (len(expert_trajectories)-len_e)*2, 'validation:', len_e*2)
         discriminator.fit(expert_state_actions[len_e:], generator_state_actions[len_e:])
@@ -88,8 +89,8 @@ def do_gail(expert:DQN, generator: DecisionTree, discriminator: DiscriminatorNN,
             if pprint:
                 print("Going to sample the expert and generator data on p(s,a) - min(p(s))")
             if not discriminateWithQ:
-                expert_qs = [expert.get_P(s, a) for s,a in expert_trajectories]
-                generator_qs = [expert.get_P(s, a) for s,a in generator_trajectories]
+                expert_qs = [expert.get_P(s) for s,_ in expert_trajectories]
+                generator_qs = [expert.get_P(s) for s,_ in generator_trajectories]
                 
                 sample_qs = []
                 sample_qs.extend(expert_qs)
@@ -98,7 +99,6 @@ def do_gail(expert:DQN, generator: DecisionTree, discriminator: DiscriminatorNN,
             
             try:
                 sample_ps = sample_qs / np.sum(sample_qs)
-
                 idx = np.random.choice(len(sample_state_actions), size=len(sample_state_actions), p=sample_ps)
                 sample_state_actions = np.asarray([sample_state_actions[i] for i in idx])
             except:

@@ -3,9 +3,8 @@ from tensorflow import keras
 import gym
 from gail import do_gail
 from rl_helper import DQN, QLearning, DecisionTree, DiscriminatorNN
-from matplotlib import pyplot as plt
 from dtreeviz.trees import *
-
+import copy
 
 print("Tensforflow version:", tf.__version__)
 print('keras version:', keras.__version__)
@@ -30,8 +29,8 @@ print('')
 memory_size, batch_size = 50000, 32
 tensorforce_agent = DQN(env, memory_size, batch_size)
 # tensorforce_agent.load()
-tensorforce_agent.train(10000, 500)
-tensorforce_agent.save()
+# tensorforce_agent.train(2500, 499)
+# tensorforce_agent.save()
 
 doGAIL = True
 if doGAIL:
@@ -41,8 +40,8 @@ if doGAIL:
     expert = DQN(env, memory_size, batch_size)
     expert.load()
 
-    total_tests = 100
-    test_e_mean, test_e_std, test_e_trajectories = expert.do_rollout(n=total_tests, print=True)
+    total_test_rollouts = 100
+    test_e_mean, test_e_std, test_e_trajectories = expert.do_rollout(n=total_test_rollouts, print=True)
     test_e_states = np.array([s for s,_ in test_e_trajectories])
     test_e_actions = np.array([a for _,a in test_e_trajectories])
 
@@ -52,60 +51,64 @@ if doGAIL:
     ownGeneratorTrajectories = False
     hasAccessToExpert = False
     sampleWithQ = False
-    discriminateWithQ = True  
-
-    # for depth in [1, 2, 3]:
-        # for n_e_trajectories in [(1,1), (3, 1), (5, 1), (7,1), (9, 1), (11, 1)]:
+    discriminateWithQ = False  
 
     train_e_mean, train_e_std, train_e_trajectories = expert.do_rollout(n=n_e_trajectories[0])
     train_e_states = np.array([s for s,_ in train_e_trajectories])
     train_e_actions = np.array([a for _,a in train_e_trajectories])
-    print(train_e_mean, train_e_std)
+    print('train_e_trajectories:', train_e_trajectories)
+    print('train_e_mean:', train_e_mean, 'train_e_std:', train_e_std)
 
-    behaviour_cloning = DecisionTree(env, max_depth=depth)
-    behaviour_cloning.fit(train_e_states, train_e_actions)
+    for depth in [1, 2, 3]:
+        # for n_e_trajectories in [(1,1), (3, 1), (5, 1), (7,1), (9, 1), (11, 1)]:
 
-    # print('Behaviour Cloning on', len(expert_trajectories), 'state-action pairs')
-    b_mean, b_std, b_trajectories = behaviour_cloning.do_rollout(n=total_tests, print=False)
-    b_score = behaviour_cloning.score(test_e_states, test_e_actions)
+        b_means, b_stds, b_scores = [], [], []
+        for i in range(3):
+            behaviour_cloning = DecisionTree(env, max_depth=depth)
+            behaviour_cloning.fit(train_e_states, train_e_actions)
 
-    target_name = f'{env.spec.id}: {str(round(b_mean, 2))} & {str(round(b_std, 2))}'
-    file_name_extra = f'{env.spec.id}_{depth}_{n_e_trajectories[0]}_{b_score}_{str(round(b_mean, 2))}_{str(round(b_std, 2))}'
-    viz = dtreeviz(behaviour_cloning.decision_tree, train_e_states, train_e_actions, feature_names=feature_names, class_names=class_names, target_name=target_name)
-    viz.save(f'./trees/svg_BC_DecistionTree_{file_name_extra}.svg')
+            # print('Behaviour Cloning on', len(expert_trajectories), 'state-action pairs')
+            b_mean, b_std, b_trajectories = behaviour_cloning.do_rollout(n=total_test_rollouts, print=False)
+            b_score = behaviour_cloning.score(test_e_states, test_e_actions)
 
-    for ownGeneratorTrajectories in [False, True]:
-        for hasAccessToExpert in [False, True]:
-            for sampleWithQ in [False, True]:
-                for discriminateWithQ in [False, True]:
+            b_means.append(b_mean)
+            b_stds.append(b_std)
+            b_scores.append(b_score)
 
-                    ## Setup gail from expert data with decision tree as generative model and mlp as discriminator model
-                    generator = DecisionTree(env, max_depth=depth)
-                    discriminator = DiscriminatorNN(env, hidden_dims=[32,32], epochs=500, discriminateWithQ=discriminateWithQ)
-                    generator, gail_expert_trajectories, gail_epoch_results = do_gail(expert, generator, discriminator, expert_trajectories=train_e_trajectories,
-                                                            n_e_trajectories=n_e_trajectories, epochs=epochs, ownGeneratorTrajectories=ownGeneratorTrajectories, 
-                                                            hasAccessToExpert=hasAccessToExpert, sampleWithQ=sampleWithQ, discriminateWithQ=discriminateWithQ, pprint=False)
-                    ## Final test expert vs Generator:
-                    # print("BC Decision Tree depth:", generator.decision_tree.get_depth(), '#leave nodes:', generator.decision_tree.get_n_leaves())
+            target_name = f'{env.spec.id}: {str(round(b_mean, 2))} & {str(round(b_std, 2))}'
+            file_name_extra = f'{env.spec.id}_{depth}_{i}_{n_e_trajectories[0]}_{str(round(b_mean, 2))}_{str(round(b_std, 2))}_{str(round(b_score, 2))}'
+            viz = dtreeviz(behaviour_cloning.decision_tree, train_e_states, train_e_actions, feature_names=feature_names, class_names=class_names, target_name=target_name)
+            viz.save(f'./trees/svg_BC_DecistionTree_{file_name_extra}.svg')
+        b_mean, b_std, b_score = np.mean(b_means), np.mean(b_stds), np.mean(b_scores)
+        print(f'Depth {depth} BC:', b_means, b_stds, b_scores, b_mean, b_std, b_score)
 
-                    # print("GAIL Decision Tree depth:", generator.decision_tree.get_depth(), '#leave nodes:', generator.decision_tree.get_n_leaves())
-                    g_mean, g_std, g_trajectories = generator.do_rollout(n=total_tests, print=False)
-                    generator.save(f'{str(round(g_mean, 2))}_{str(round(g_std, 2))}')
+        for ownGeneratorTrajectories in [False, True]:
+            for hasAccessToExpert in [False, True]:
+                for sampleWithQ in [False, True]:
+                    for discriminateWithQ in [False, True]:
 
-                    # total_trajectories = 10
-                    states = np.array([s for s,_ in gail_expert_trajectories])
-                    actions = np.array([a for _,a in gail_expert_trajectories])
+                        ## Setup gail from expert data with decision tree as generative model and mlp as discriminator model
+                        generator = DecisionTree(env, max_depth=depth)
+                        discriminator = DiscriminatorNN(env, hidden_dims=[32,32], epochs=500, discriminateWithQ=discriminateWithQ)
+                        generator, gail_expert_trajectories, gail_epoch_results = do_gail(expert, generator, discriminator, expert_trajectories=copy.deepcopy(train_e_trajectories),
+                                                                n_e_trajectories=n_e_trajectories, epochs=epochs, ownGeneratorTrajectories=ownGeneratorTrajectories, 
+                                                                hasAccessToExpert=hasAccessToExpert, sampleWithQ=sampleWithQ, discriminateWithQ=discriminateWithQ, pprint=False)
+                        ## Final test expert vs Generator:
+                        # print("BC Decision Tree depth:", generator.decision_tree.get_depth(), '#leave nodes:', generator.decision_tree.get_n_leaves())
 
-                    g_score = generator.score(test_e_states, test_e_actions)
+                        # print("GAIL Decision Tree depth:", generator.decision_tree.get_depth(), '#leave nodes:', generator.decision_tree.get_n_leaves())
+                        g_mean, g_std, g_trajectories = generator.do_rollout(n=total_test_rollouts, print=False)
+                        generator.save(f'{str(round(g_mean, 2))}_{str(round(g_std, 2))}')
 
-                    ## Evaluate the new generative model in terms of interpretability (size, average path length, compared to optimal)
-                    target_name = f'{env.spec.id}: {str(round(g_mean, 2))} & {str(round(g_std, 2))}'
-                    file_name_extra = f'{env.spec.id}_{depth}_{n_e_trajectories[0]}_{n_e_trajectories[1]}_{epochs}_{ownGeneratorTrajectories}_{hasAccessToExpert}_{sampleWithQ}_{discriminateWithQ}_{len(gail_expert_trajectories)}_{str(round(train_e_mean, 2))}_{str(round(train_e_std, 2))}_{str(round(b_mean, 2))}_{str(round(b_std, 2))}_{str(round(g_mean, 2))}_{str(round(g_std, 2))}_{str(round(b_score,2))}_{str(round(g_score,2))}'
-                    viz = dtreeviz(generator.decision_tree, states, actions, feature_names=feature_names, class_names=class_names, target_name=target_name)
-                    viz.save(f'./trees/svg_GAIL_DecistionTree_{file_name_extra}.svg')
+                        g_score = generator.score(test_e_states, test_e_actions)
 
+                        ## Evaluate the new generative model in terms of interpretability (size, average path length, compared to optimal)
+                        target_name = f'{env.spec.id}: u: {str(round(g_mean, 2))} & SD: {str(round(g_std, 2))}'
+                        file_name_extra = f'{env.spec.id}_{depth}_{n_e_trajectories[0]}_{n_e_trajectories[1]}_{epochs}_{ownGeneratorTrajectories}_{hasAccessToExpert}_{sampleWithQ}_{discriminateWithQ}_{len(gail_expert_trajectories)}_{str(round(train_e_mean, 2))}_{str(round(train_e_std, 2))}_{str(round(b_mean, 2))}_{str(round(b_std, 2))}_{str(round(g_mean, 2))}_{str(round(g_std, 2))}_{str(round(b_score,2))}_{str(round(g_score,2))}'
+                        viz = dtreeviz(generator.decision_tree, test_e_states, test_e_actions, feature_names=feature_names, class_names=class_names, target_name=target_name)
+                        viz.save(f'./trees/svg_GAIL_DecistionTree_{file_name_extra}.svg')
 
-                    print(env.spec.id, depth, n_e_trajectories[0], n_e_trajectories[1], epochs, ownGeneratorTrajectories, hasAccessToExpert, sampleWithQ, discriminateWithQ, len(gail_expert_trajectories), train_e_mean, train_e_std, b_mean, b_std, g_mean, g_std, round(b_score,2), round(g_score,2), gail_epoch_results)
+                        print(env.spec.id, depth, n_e_trajectories[0], n_e_trajectories[1], epochs, ownGeneratorTrajectories, hasAccessToExpert, sampleWithQ, discriminateWithQ, len(gail_expert_trajectories), round(train_e_mean, 3), round(train_e_std, 3), round(b_mean, 3), round(b_std, 3), round(g_mean, 3), round(g_std,3), round(b_score,3), round(g_score,3), gail_epoch_results)
 
     # ct = ctreeviz_bivar(generator.decision_tree, states[:,[1,3]], actions, feature_names=feature_names, class_names=class_names, target_name=target_name)
     # plt.tight_layout()

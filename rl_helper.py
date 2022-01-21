@@ -50,7 +50,6 @@ class RL_Agent():
             do_start_action = False
             if start_action != -1:
                 do_start_action = True
-
             game_reward = 0
             done = False
             while done == False:
@@ -146,11 +145,11 @@ class DecisionTree(RL_Agent):
         self.env = env
         self.env.reset()
         self.max_depth = max_depth
-        self.decision_tree = DecisionTreeClassifier(max_depth=max_depth, ccp_alpha=0.013)
+        self.decision_tree = DecisionTreeClassifier(max_depth=max_depth)
         self.decision_tree.fit([env.reset(), env.reset()], [0, 1])
 
-    def load(self):
-        self.decision_tree = self.loadz(f'./models/DecisionTree_{self.env.spec.id}_{self.max_depth}')
+    def load(self, extra):
+        self.decision_tree = self.loadz(f'./models/DecisionTree_{self.env.spec.id}_{self.max_depth}_{extra}')
 
     def save(self, extra):
         self.savez(self.decision_tree, f'./models/DecisionTree_{self.env.spec.id}_{self.max_depth}_{extra}')
@@ -179,8 +178,6 @@ class DQN(RL_Agent):
             dict(type='dense', size=64), 
             dict(type='dense', size=64)
         ]
-        # print('states', self.environment.states())
-        # print('actions', self.environment.actions())
 
         self.agent = Agent.create(
             agent='dqn',
@@ -200,11 +197,17 @@ class DQN(RL_Agent):
     def do_action(self, state):
         return self.agent.act(state, independent=True, deterministic=True)
 
-    def get_P(self, state, action):
+    # def get_P(self, state, action):
+    #     self.agent.act(states=state, independent=True, deterministic=True)
+    #     action_values = self.agent.tracked_tensors()['agent/policy/action-values']
+    #     action_values = action_values / np.sum(action_values)
+    #     return action_values[action] - min(action_values)
+    def get_P(self, state):
         self.agent.act(states=state, independent=True, deterministic=True)
         action_values = self.agent.tracked_tensors()['agent/policy/action-values']
         action_values = action_values / np.sum(action_values)
-        return action_values[action] - min(action_values)
+        return max(action_values) - min(action_values)
+
 
     def do_rollout(self, n=1, state=[], action=-1, render=False, print=False):
         return super().do_rollout(self.do_action, self.env, n, "TensorForce", start_state=state, start_action=action, render=render, pprint=print)
@@ -308,9 +311,6 @@ class QLearning(RL_Agent):
 
         self.env.close()
         print("Finished training!")
-
-
-
 
 
 class LogRegression:
