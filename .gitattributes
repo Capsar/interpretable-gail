@@ -1,0 +1,11 @@
+*.svg linguist-detectable=false
+*.1 linguist-detectable=false
+*.2 linguist-detectable=false
+*.3 linguist-detectable=false
+*.4 linguist-detectable=false
+*.5 linguist-detectable=false
+*.6 linguist-detectable=false
+*.7 linguist-detectable=false
+*.8 linguist-detectable=false
+*.9 linguist-detectable=false
+*.roff linguist-detectable=false
