@@ -1,5 +1,4 @@
 from numpy.core.fromnumeric import argmax
-from numpy.random.mtrand import sample
 from rl_helper import DQN, QLearning, DecisionTree, DiscriminatorNN
 import numpy as np
 import copy
@@ -16,7 +15,7 @@ def do_gail(expert:DQN, generator: DecisionTree, discriminator: DiscriminatorNN,
     if pprint:
         print('Number of expert state-action pairs:', len(expert_trajectories))
 
-    number_of_tests = 50
+    number_of_tests = 100
 
     expert_mean, expert_std, _ = expert.do_rollout(n=number_of_tests, print=pprint)
     if pprint:
@@ -60,6 +59,8 @@ def do_gail(expert:DQN, generator: DecisionTree, discriminator: DiscriminatorNN,
             sample_qs.extend(expert_qs)
             sample_qs.extend(generator_qs)
             sample_qs = np.asarray(sample_qs)
+
+            sample_qs = (sample_qs - min(sample_qs)) / (max(sample_qs) - min(sample_qs))
 
             expert_qs = sample_qs[:len(expert_qs)]
             generator_qs = sample_qs[len(expert_qs):]
