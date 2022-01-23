@@ -11,8 +11,8 @@ print("Tensforflow version:", tf.__version__)
 print('keras version:', keras.__version__)
 
 # env, discretize, discount = PongEnv(), [0.5, 0.5, 0.5, 0.5, 0.25, 0.25], 0.999
-env, discretize, discount, feature_names, class_names = gym.make("Acrobot-v1"), [10, 10, 10, 10, 2, 2], 0.95, ['cos(theta1)', 'sin(theta1)', 'cos(theta2)', 'sin(theta2)', 'thetaDOT1', 'thetaDOT2'], ['torque +1', 'torque 0', 'torque -1']
-# env, discretize, discount, feature_names, class_names = gym.make("CartPole-v1"), [10, 10, 10, 10], 0.95, ['Cart Position', 'Cart Velocity', 'Pole Angle', 'Pole Angular Velocity'], ['Left', 'Right']
+# env, discretize, discount, feature_names, class_names = gym.make("Acrobot-v1"), [10, 10, 10, 10, 2, 2], 0.95, ['cos(theta1)', 'sin(theta1)', 'cos(theta2)', 'sin(theta2)', 'thetaDOT1', 'thetaDOT2'], ['torque +1', 'torque 0', 'torque -1']
+env, discretize, discount, feature_names, class_names = gym.make("CartPole-v1"), [10, 10, 10, 10], 0.95, ['Cart Position', 'Cart Velocity', 'Pole Angle', 'Pole Angular Velocity'], ['Left', 'Right']
 # env, discretize, discount, feature_names, class_names = gym.make("MountainCar-v0"), [30, 300], 0.95, ['Cart Postion', 'Cart Velocity'], ['Left++', 'Do nothing', 'Right++']
 print('Time:', datetime.now())
 print('Env:', env.spec.id)
@@ -49,21 +49,21 @@ if doGAIL:
     test_e_actions = np.array([a for _,a in test_e_trajectories])
 
     depth = 1
-    n_e_trajectories = (1, 1)
+    n_e_trajectories = (10, 1)
     epochs = 10
     ownGeneratorTrajectories = False
     hasAccessToExpert = False
     sampleWithQ = False
     discriminateWithQ = False  
 
-    for xx in range(2):
+    for xx in range(4):
         train_e_mean, train_e_std, train_e_trajectories = expert.do_rollout(n=n_e_trajectories[0])
         train_e_states = np.array([s for s,_ in train_e_trajectories])
         train_e_actions = np.array([a for _,a in train_e_trajectories])
-        print('train_e_trajectories:', train_e_trajectories)
+        # print('train_e_trajectories:', train_e_trajectories)
         print('train_e_mean:', train_e_mean, 'train_e_std:', train_e_std)
 
-        for depth in [1, 2, 3]:
+        for depth in [3]:
             # for n_e_trajectories in [(1,1), (3, 1), (5, 1), (7,1), (9, 1), (11, 1)]:
 
             b_means, b_stds, b_scores = [], [], []

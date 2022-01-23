@@ -59,7 +59,6 @@ class RL_Agent():
                 if do_start_action:
                     action = start_action
                     do_start_action = False
-
                 state, reward, done, _ = env.step(action)
                 trajectory.append((state, action))
                 game_reward += reward
@@ -207,7 +206,6 @@ class DQN(RL_Agent):
         action_values = self.agent.tracked_tensors()['agent/policy/action-values']
         action_values = action_values / np.sum(action_values)
         return max(action_values) - min(action_values)
-
 
     def do_rollout(self, n=1, state=[], action=-1, render=False, print=False):
         return super().do_rollout(self.do_action, self.env, n, "TensorForce", start_state=state, start_action=action, render=render, pprint=print)
