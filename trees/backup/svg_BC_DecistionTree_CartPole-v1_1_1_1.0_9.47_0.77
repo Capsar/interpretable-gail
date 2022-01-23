@@ -1,0 +1,24 @@
+
+digraph G {
+    splines=line;
+    nodesep=0.1;
+    ranksep=.2;
+    rankdir=TD;
+    margin=0.0;
+    
+    node [margin="0.03" penwidth="0.5" width=.1, height=.1];
+    edge [arrowsize=.4 penwidth="0.3"]
+
+    
+    
+    leaf0 [margin="0" shape=box penwidth="0" color="#444443" label=<<table border="0">
+        
+        <tr>
+                <td><img src="C:\Users\caspa\AppData\Local\Temp/leaf0_26176.svg"/></td>
+        </tr>
+        </table>>]
+
+    
+    
+}
+    
