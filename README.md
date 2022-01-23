@@ -1,2 +1,2 @@
 # interpretable-gail
-Repository for Research Project about comparing trained models by GAIL in terms of Accuracy, Succinctness, and Interpretability
+Repository for Research Project about Using Decision Trees produced by Generative Adversarial Imitation Learning to give insight into black box Reinforcement Learning models.
